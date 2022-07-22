@@ -10,96 +10,85 @@ onready var floor_plane = $FloorPlane
 onready var road_path = $RoadPath
 onready var csg_polygon = $RoadCSGPolygon
 
-# Called when the node enters the scene tree for the first time.
-func _ready():
-	pass # Replace with function body.
+const splittings = 4
+const road_size = 0.5
+const invert_x_offsets = {
+	0: false,
+	1: true,
+	2: false,
+	3: true
+}
+const invert_z_offsets = {
+	0: false,
+	1: false,
+	2: true,
+	3: true
+}
 
-func _process(delta):
+func _process(_delta):
 	if (trigger_gen):
 		trigger_gen = false
-		gen_children()
+		gen_children(self, 0, width, height)
 
-
-func setup_grid():
-	var floor_mesh: PlaneMesh = floor_plane.mesh
-	floor_mesh.size = Vector2(width, height)
-	floor_plane.visible = true
-	floor_plane.owner = get_tree().get_edited_scene_root()
-	
-	var offset_x = width / 2
-	var offset_z = height / 2
-	road_path.curve.clear_points()
-	road_path.curve.add_point(offset_x, offset_x)
-	road_path.curve.add_point(-offset_x, offset_x)
-	road_path.curve.add_point(-offset_x, -offset_x)
-	road_path.owner = get_tree().get_edited_scene_root()
-	
-	csg_polygon.path_node = road_path.get_path()
-	csg_polygon.visible = true
-	csg_polygon.owner = get_tree().get_edited_scene_root()
-	
-func gen_children():
-	var city_grid_scene = load("res://src/CityGridNode.tscn")
-	
-	var scene_1 = city_grid_scene.duplicate(true)
-	scene_1.resource_local_to_scene = true
-	
-	var scene_2 = city_grid_scene.duplicate(true)
-	scene_2.resource_local_to_scene = true
-	
-	var scene_3 = city_grid_scene.duplicate(true)
-	scene_3.resource_local_to_scene = true
-	
-	var scene_4 = city_grid_scene.duplicate(true)
-	scene_4.resource_local_to_scene = true
-	
-	var offsetX = width / 4
-	var offsetZ = height / 4
+func gen_children(parent_node: Node, depth: int, cw: float, ch: float):
+	var child_width = cw / 2
+	var child_height = ch / 2
+	for n in splittings:
+		var new_node = Spatial.new()
+		new_node.name = "CityBlock_%d_%d" % [depth, n]
 		
-	var grid_node_1 = scene_1.instance()
-	grid_node_1.width = width / 2
-	grid_node_1.height = height / 2
-	if (nesting_depth > 0):
-		grid_node_1.nesting_depth = nesting_depth - 1
-		grid_node_1.trigger_gen = true
-	grid_node_1.translate(Vector3(offsetX, 0, offsetZ))
-	add_child(grid_node_1)
-	grid_node_1.owner = get_tree().get_edited_scene_root()
-	if (nesting_depth <= 0):
-		grid_node_1.setup_grid()
+		var x_offset = cw / 4
+		if invert_x_offsets[n]:
+			x_offset = -x_offset
+		var z_offset = ch / 4
+		if invert_z_offsets[n]:
+			z_offset = -z_offset
+		new_node.translate(Vector3(x_offset, 0, z_offset))
+		parent_node.add_child(new_node)
+		
+		# Safe node to scene if run as tool script
+		if Engine.editor_hint:
+			new_node.owner = get_tree().get_edited_scene_root()
+		
+		if depth == nesting_depth - 1:
+			setup_block(new_node, child_width, child_height)
+		
+		if depth < nesting_depth - 1:
+			gen_children(new_node, depth + 1, child_width, child_height)
 
-	var grid_node_2 = scene_2.instance()
-	grid_node_2.width = width / 2
-	grid_node_2.height = height / 2
-	if (nesting_depth > 0):
-		grid_node_2.nesting_depth = nesting_depth - 1
-		grid_node_2.trigger_gen = true
-	grid_node_2.translate(Vector3(-offsetX, 0, offsetZ))
-	add_child(grid_node_2)
-	grid_node_2.owner = get_tree().get_edited_scene_root()
-	if (nesting_depth <= 0):
-		grid_node_2.setup_grid()
+func setup_block(container_node: Node, cw: float, ch: float):
+	var plane_mesh = PlaneMesh.new()
+	plane_mesh.size = Vector2(cw, ch)
 	
-	var grid_node_3 = scene_3.instance()
-	grid_node_3.width = width / 2
-	grid_node_3.height = height / 2
-	if (nesting_depth > 0):
-		grid_node_3.nesting_depth = nesting_depth - 1
-		grid_node_3.trigger_gen = true
-	grid_node_3.translate(Vector3(offsetX, 0, -offsetZ))
-	add_child(grid_node_3)
-	grid_node_3.owner = get_tree().get_edited_scene_root()
-	if (nesting_depth <= 0):
-		grid_node_3.setup_grid()
+	var floor_mesh_instance = MeshInstance.new()
+	floor_mesh_instance.name = "Floor"
+	floor_mesh_instance.mesh = plane_mesh
+	container_node.add_child(floor_mesh_instance)
 	
-	var grid_node_4 = scene_4.instance()
-	grid_node_4.width = width / 2
-	grid_node_4.height = height / 2
-	if (nesting_depth > 0):
-		grid_node_4.nesting_depth = nesting_depth - 1
-		grid_node_4.trigger_gen = true
-	grid_node_4.translate(Vector3(-offsetX, 0, -offsetZ))
-	add_child(grid_node_4)
-	grid_node_4.owner = get_tree().get_edited_scene_root()
-	if (nesting_depth <= 0):
-		grid_node_4.setup_grid()
+	# Road generation
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	st.add_vertex(Vector3(-cw/2 + road_size, 0.01, -ch/2 + road_size))	#1
+	st.add_vertex(Vector3(-cw/2, 0.01, -ch/2))							#2
+	st.add_vertex(Vector3(cw/2 - road_size, 0.01, -ch/2 + road_size))	#3
+	st.add_vertex(Vector3(cw/2, 0.01, -ch/2))							#4
+	st.add_vertex(Vector3(cw/2 - road_size, 0.01, ch/2 - road_size))	#5
+	st.add_vertex(Vector3(cw/2, 0.01, ch/2))							#6
+	st.add_vertex(Vector3(-cw/2 + road_size, 0.01, ch/2 - road_size))	#7
+	st.add_vertex(Vector3(-cw/2, 0.01, ch/2))							#8
+	st.add_vertex(Vector3(-cw/2 + road_size, 0.01, -ch/2 + road_size))	#9
+	st.add_vertex(Vector3(-cw/2, 0.01, -ch/2))							#10
+	st.generate_normals(true)
+	st.generate_tangents()
+	
+	var road_mesh = st.commit()
+	
+	var road_instance = MeshInstance.new()
+	road_instance.name = "Road"
+	road_instance.mesh = road_mesh
+	container_node.add_child(road_instance)
+	
+	# Safe node to scene if run as tool script
+	if Engine.editor_hint:
+		floor_mesh_instance.owner = get_tree().get_edited_scene_root()
+		road_instance.owner = get_tree().get_edited_scene_root()
