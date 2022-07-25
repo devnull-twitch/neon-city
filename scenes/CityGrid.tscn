@@ -1,7 +1,20 @@
-[gd_scene load_steps=2 format=2]
+[gd_scene load_steps=5 format=2]
 
 [ext_resource path="res://src/CityGrid.gd" type="Script" id=1]
+[ext_resource path="res://materials/RoadMat.tres" type="Material" id=2]
+[ext_resource path="res://materials/FloorMat.tres" type="Material" id=3]
+[ext_resource path="res://materials/BuildingMat.tres" type="Material" id=4]
 
 [node name="CityGrid" type="Spatial"]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, -0.234512, 0.282058, 0.116215 )
 script = ExtResource( 1 )
-nesting_depth = 2
+width = 300.0
+height = 300.0
+road_material = ExtResource( 2 )
+floor_material = ExtResource( 3 )
+building_material = ExtResource( 4 )
+
+[node name="Camera" type="Camera" parent="."]
+transform = Transform( 0.798278, -0.308009, 0.517573, 0, 0.859344, 0.511398, -0.602289, -0.408238, 0.685996, 106.702, 22.1291, 100.273 )
+current = true
+far = 500.0
